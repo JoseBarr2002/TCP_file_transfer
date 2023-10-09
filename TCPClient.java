@@ -8,6 +8,8 @@
  ***********************************************************************************************************/
 
 import java.net.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.io.*;
@@ -17,75 +19,119 @@ import javax.swing.JOptionPane;
 
 public class TCPClient 
 {
-	/***
-	 * Method that encrypts an input String using the SHA-256 algorthim.
-	 * @param input The String to encrypt.
-	 * @return The encrypted String.
-	 * @throws NoSuchAlgorithmException
-	 */
-	public String encryptString(String input) throws NoSuchAlgorithmException
- 	{
-        //MesageDigest works with MD2, MD5, SHA-1, SHA-224, SHA-256
-        //SHA-384, and SHA-512
-        MessageDigest md = MessageDigest.getInstance("SHA-256");
-
-        byte[] messageDigest = md.digest(input.getBytes());
-
-        BigInteger bigInt = new BigInteger(1, messageDigest);
-        
-        return bigInt.toString(16);
-    }
-
+	
 	/**
-	 * Method that computes the throughput. 
-	 * @param fileSizeInBits The size of the file in bits.
-	 * @param timeTaken The time taken to recieve the file.
-	 * @return The throughput.
+	 * Entry point of the program.
+	 * @param args Used to take in the user's file directory.
+	 * @throws IOException
+	 * @throws UnknownHostException
 	 */
-	public double throughput(int fileSizeInBits, double timeTaken){
-
-		double tp = (double) fileSizeInBits / timeTaken;
-
-		return tp;
-	}
-
-	public static void main(String[] args) 
+	public static void main(String[] args) throws UnknownHostException, IOException 
 	{
+		/**The file path taken from the command line.*/
+		String filePath = args[0];
+		/**The server's name.*/
 		String serverName = "localhost";
 		//String serverName = "192.168.1.135";
+		/**The server's port.*/
 		int port = 9999;
-		
-		try 
-		{
-			System.out.println("Connecting to " + serverName + " on port " + port);
-			
-			Socket clientSocket = new Socket(serverName, port);  //create socket for connecting to server
-			
+
+		//Read the file in bytes
+		byte[] fileBytes = Files.readAllBytes(Paths.get(filePath));
+		//hash the file
+		String sha256Client = computeSHA256(fileBytes);
+
+		//Attemp to connect to server
+		System.out.println("Connecting to " + serverName + " on port " + port);
+
+		try (Socket clientSocket = new Socket("localhost", 9999)) {
+			//Estabished connection
 			System.out.println("Just connected to " + clientSocket.getRemoteSocketAddress());
+
+			//sends file in bytes to the server and starts the timer
+			clientSocket.getOutputStream().write(fileBytes);
+			long startTime = System.currentTimeMillis();
+
+			//receives data from the server and stops the timer
+			DataInputStream in = new DataInputStream(clientSocket.getInputStream());
+			String sha256Server = in.readUTF();
+			long endTime = System.currentTimeMillis();
+
+			//RTT in seconds
+			double timeTaken = (endTime - startTime) / 1000.0;
+			// throughput in Mbps
+			double throughput = (fileBytes.length * 8) / (1000000.0 * timeTaken);
+
+			//conditions
+			if (sha256Client.equals(sha256Server)) {
+				System.out.println("Successfully sent!");
+				System.out.println("File name: " + filePath);
+				System.out.println("SHA-256 hash: " + sha256Client);
+				System.out.println("File size in bits: " + fileBytes.length * 8 );
+				System.out.println("Time taken: " + timeTaken + " s");
+				System.out.println("Throughput: " + String.format("%.2f", throughput) + " Mbps");
+			} 
+			else {
+				System.out.println("Error!");
+				System.out.println("File name: " + filePath);
+				System.out.println("SHA-256 hash: " + sha256Client);
+				System.out.println("File size in bits: " + fileBytes.length * 8 );
+			}
+
+
+
+
+
+		}
+		// try 
+		// {
+		// 	System.out.println("Connecting to " + serverName + " on port " + port);
 			
-			OutputStream outToServer = clientSocket.getOutputStream();  //stream of bytes
+		// 	//Socket to connect to the server.
+		// 	Socket clientSocket = new Socket(serverName, port);
 			
-			DataOutputStream out = new DataOutputStream(outToServer);
+		// 	System.out.println("Just connected to " + clientSocket.getRemoteSocketAddress());
+
+		//     //Sends data to the server
+		// 	OutputStream outToServer = clientSocket.getOutputStream();  //stream of bytes
+		// 	DataOutputStream out = new DataOutputStream(outToServer);
+		// 	String outText = JOptionPane.showInputDialog("Enter Client Message: ");
+		// 	System.out.println("TCP Client says: " + outText);
+		// 	out.writeUTF(outText);
 			
-			String outText = JOptionPane.showInputDialog("Enter Client Message: ");
+		// 	//Receives data from the server
+		// 	InputStream inFromServer = clientSocket.getInputStream();  //stream of bytes
+		// 	DataInputStream in = new DataInputStream(inFromServer);
+		// 	System.out.println("TCP Server says: " + in.readUTF());
 			
-			System.out.println("TCP Client says: " + outText);
+		// 	//The socket is closed
+		// 	clientSocket.close();
 			
-			out.writeUTF(outText);
-			
-			InputStream inFromServer = clientSocket.getInputStream();  //stream of bytes
-			
-			DataInputStream in = new DataInputStream(inFromServer);
-			
-			System.out.println("TCP Server says: " + in.readUTF());
-			
-			clientSocket.close();
-			
-		} 
+		// } 
 		catch (IOException e)
 		{
 			e.printStackTrace();
 		}
-	}
+	}//end of main
 
-}
+	/**
+	 * Method that encrypts the given file.
+	 * @param data The file to encrypt.
+	 * @return The encrypted file.
+	 */
+		public static String computeSHA256(byte[] data) {
+		try {
+			MessageDigest digest = MessageDigest.getInstance("SHA-256");
+			byte[] hash = digest.digest(data);
+			StringBuilder hexString = new StringBuilder(2 * hash.length);
+			for (byte b : hash) {
+				String hex = Integer.toHexString(0xff & b);
+				if (hex.length() == 1) hexString.append('0');
+				hexString.append(hex);
+			}
+			return hexString.toString();
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
+	}//end of computeSHA256
+}//end of class
