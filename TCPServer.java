@@ -13,6 +13,9 @@ import java.security.NoSuchAlgorithmException;
 import java.io.*;
 import java.math.BigInteger;
 
+/**
+ * Class that acts as a server.
+ */
 public class TCPServer {
 
 	/**
@@ -25,6 +28,7 @@ public class TCPServer {
 		try (ServerSocket serverSocket = new ServerSocket(9999)) {
 			while (true) {
 				System.out.println();
+				System.out.println("To exit server, you will have to manually 'kill' the program. >:)");
 				System.out.println("Waiting for client on port " + serverSocket.getLocalPort() + "...");
 
 				Socket connectionSocket = serverSocket.accept();
@@ -33,32 +37,34 @@ public class TCPServer {
 				// System.out.println("recieving file");
 
 				/****/
-				// Receive file size first
+				// Receive file size
 				DataInputStream in = new DataInputStream(connectionSocket.getInputStream());
-				int fileSize = in.readInt(); // Read the size of the file first
+				int fileSize = in.readInt();
 
-				// Receive file data in chunks
-				byte[] buffer = new byte[4096]; // 4KB buffer
-				ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+				// Receive file in chunks (packets)
+				byte[] packets = new byte[4096]; // 4000 byte storage
+				ByteArrayOutputStream bAOS = new ByteArrayOutputStream();
 
+				// Reading the file
 				int bytesRead;
 				int totalBytesRead = 0;
-				while (totalBytesRead < fileSize && (bytesRead = in.read(buffer)) != -1) {
-					byteArrayOutputStream.write(buffer, 0, bytesRead);
+				while (totalBytesRead < fileSize && (bytesRead = in.read(packets)) != -1) {
+					bAOS.write(packets, 0, bytesRead);
 					totalBytesRead += bytesRead;
 				}
-				byte[] fileBytes = byteArrayOutputStream.toByteArray();
+				byte[] fileBytes = bAOS.toByteArray();
 				System.out.println("Received file size in bits: " + fileBytes.length * 8);
 				/****/
 
-				System.out.println("Received file SHA256 hash: " + computeSHA256(fileBytes));
+				System.out.println("Received file SHA256 hash: " + encrypt(fileBytes));
 
 				// Sending the data to the client
 				DataOutputStream out = new DataOutputStream(connectionSocket.getOutputStream());
-				out.writeUTF(computeSHA256(fileBytes));
-				out.flush();
+				out.writeUTF(encrypt(fileBytes));
+				out.flush(); // this sh*t too
 				// System.out.println("Hash sent to client.");
 
+				// Closing streams
 				in.close();
 				out.close();
 				// System.out.println("End of connection");
@@ -74,20 +80,20 @@ public class TCPServer {
 	 * @param data The file to encrypt.
 	 * @return The encrypted file.
 	 */
-	public static String computeSHA256(byte[] data) {
+	public static String encrypt(byte[] data) {
 		try {
 			MessageDigest digest = MessageDigest.getInstance("SHA-256");
 			byte[] hash = digest.digest(data);
-			StringBuilder hexString = new StringBuilder(2 * hash.length);
+			StringBuilder hexSB = new StringBuilder(2 * hash.length);
 			for (byte b : hash) {
 				String hex = Integer.toHexString(0xff & b);
 				if (hex.length() == 1)
-					hexString.append('0');
-				hexString.append(hex);
+					hexSB.append('0');
+				hexSB.append(hex);
 			}
-			return hexString.toString();
+			return hexSB.toString();
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
-	}// end of computeSHA256
+	}// end of encrypt
 }// end of class
