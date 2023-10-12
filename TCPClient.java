@@ -71,7 +71,7 @@ public class TCPClient {
 			// RTT in milliseconds
 			double RTT = (endTime - startTime);
 			// Throughput in Mbps
-			double throughput = ((fileInBytes.length * 8) / (RTT)) * 1000;
+			double throughput = ((fileInBytes.length * 8) / (RTT)) * 1000 / 1000000;
 
 			// Conditions
 			if (clientHash.equals(serverHash)) {
